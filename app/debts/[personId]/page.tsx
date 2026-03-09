@@ -25,7 +25,7 @@ export default function DebtDetailsPage ({
 }: {
   params: Promise<{ personId: string }>
 }) {
-  const { personId } = use(params())
+  const { personId } = use(params)
   const currency = useUserCurrency()
   const getPersonById = useDebtStore((s) => s.getPersonById)
   const getPersonSummary = useDebtStore((s) => s.getPersonSummary)
