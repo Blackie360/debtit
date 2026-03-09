@@ -1,10 +1,16 @@
-const isPostgres = process.env.NODE_ENV === 'production'
+// Use Postgres when DATABASE_URL is set; fall back to SQLite for local dev
+const usePostgres = !!process.env.DATABASE_URL
 
 function createDb () {
-  if (isPostgres) {
+  if (usePostgres) {
     const postgres = require('postgres')
     const { drizzle } = require('drizzle-orm/postgres-js')
-    const client = postgres(process.env.DATABASE_URL!)
+    // max:1 prevents connection pool exhaustion in serverless/Next.js runtimes
+    const client = postgres(process.env.DATABASE_URL!, {
+      max: 1,
+      idle_timeout: 20,
+      connect_timeout: 5,
+    })
     return { db: drizzle(client), provider: 'pg' as const }
   }
 
