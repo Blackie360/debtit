@@ -1,0 +1,69 @@
+name: Issue Opened
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  triage:
+    name: Triage New Issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add project labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue
+            const title = issue.title.toLowerCase()
+            const body = (issue.body || '').toLowerCase()
+
+            const labels = []
+
+            if (title.includes('bug') || body.includes('bug')) {
+              labels.push('bug')
+            }
+            if (title.includes('feature') || body.includes('feature') || title.includes('add')) {
+              labels.push('enhancement')
+            }
+            if (title.includes('fix') || body.includes('fix')) {
+              labels.push('bug')
+            }
+            if (title.includes('refactor') || body.includes('refactor')) {
+              labels.push('refactor')
+            }
+            if (title.includes('docs') || body.includes('documentation')) {
+              labels.push('documentation')
+            }
+
+            // Deduplicate
+            const unique = [...new Set(labels)]
+
+            if (unique.length > 0) {
+              try {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: unique
+                })
+              } catch (e) {
+                // Labels may not exist yet — skip gracefully
+                console.log(`Could not add labels: ${e.message}`)
+              }
+            }
+
+      - name: Welcome comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: `Thanks for opening this issue! A branch should be created for this work.\n\nBranch naming convention: \`${issue.number}-<short-description>\``
+            })

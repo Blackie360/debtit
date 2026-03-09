@@ -1,0 +1,84 @@
+name: PR Closed
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  cleanup:
+    name: Post-Merge Cleanup
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - name: Comment on linked issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request
+            const body = pr.body || ''
+
+            // Find "Closes #N" references
+            const issueRefs = body.match(/closes?\s+#(\d+)/gi) || []
+            const issueNumbers = issueRefs.map(ref => {
+              const match = ref.match(/#(\d+)/)
+              return match ? parseInt(match[1]) : null
+            }).filter(Boolean)
+
+            for (const num of issueNumbers) {
+              try {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: num,
+                  body: `This issue was resolved by PR #${pr.number} and merged into \`${pr.base.ref}\`.`
+                })
+              } catch (e) {
+                console.log(`Could not comment on issue #${num}: ${e.message}`)
+              }
+            }
+
+      - name: Add merged label to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ['merged']
+              })
+            } catch (e) {
+              console.log(`Could not add label: ${e.message}`)
+            }
+
+  not-merged:
+    name: Closed Without Merge
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == false
+    steps:
+      - name: Label as closed without merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                labels: ['closed-without-merge']
+              })
+            } catch (e) {
+              console.log(`Could not add label: ${e.message}`)
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: 'This PR was closed without merging. If the work is still needed, please reopen or create a new PR.'
+            })

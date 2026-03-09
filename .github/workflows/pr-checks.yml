@@ -1,0 +1,167 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint
+        run: pnpm lint
+
+      - name: TypeScript type check
+        run: pnpm exec tsc --noEmit
+
+      - name: Build check
+        run: pnpm build
+
+  theme-consistency:
+    name: Theme Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Tailwind class consistency
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process')
+            const fs = require('fs')
+            const path = require('path')
+
+            const warnings = []
+
+            // Get changed files in this PR
+            const diffOutput = execSync(
+              `git diff --name-only --diff-filter=ACMR origin/${context.payload.pull_request.base.ref}...HEAD`
+            ).toString().trim()
+
+            if (!diffOutput) {
+              console.log('No changed files to check.')
+              return
+            }
+
+            const changedFiles = diffOutput
+              .split('\n')
+              .filter(f => /\.(tsx?|jsx?)$/.test(f) && fs.existsSync(f))
+
+            // Inline color values that bypass the theme system
+            const inlineColorPattern = /(?:bg|text|border|ring|shadow|outline|fill|stroke)-\[(#[0-9a-fA-F]{3,8}|rgb|rgba|hsl|hsla)/g
+
+            // Hardcoded px values that should use spacing scale
+            const hardcodedSizePattern = /(?:w|h|p|m|gap|space|top|left|right|bottom)-\[\d+px\]/g
+
+            for (const file of changedFiles) {
+              const content = fs.readFileSync(file, 'utf8')
+              const lines = content.split('\n')
+
+              lines.forEach((line, idx) => {
+                const colorMatches = line.match(inlineColorPattern)
+                if (colorMatches) {
+                  warnings.push(
+                    `**${file}:${idx + 1}** — Inline color \`${colorMatches[0]}\` detected. Use theme tokens instead (e.g., \`bg-primary\`, \`text-muted-foreground\`).`
+                  )
+                }
+
+                const sizeMatches = line.match(hardcodedSizePattern)
+                if (sizeMatches) {
+                  warnings.push(
+                    `**${file}:${idx + 1}** — Hardcoded size \`${sizeMatches[0]}\` detected. Prefer Tailwind spacing scale (e.g., \`w-4\`, \`p-2\`).`
+                  )
+                }
+              })
+            }
+
+            if (warnings.length > 0) {
+              const body = [
+                '## Theme Consistency Report',
+                '',
+                `Found **${warnings.length}** theme concern(s):`,
+                '',
+                ...warnings.map(w => `- ${w}`),
+                '',
+                '> Prefer using design tokens and Tailwind\'s default scale for colors, spacing, and sizing to keep the UI consistent.'
+              ].join('\n')
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body
+              })
+
+              if (warnings.length > 10) {
+                core.setFailed(`Too many theme inconsistencies (${warnings.length}). Please fix before merging.`)
+              } else {
+                core.warning(`Found ${warnings.length} theme concern(s). Review the PR comment.`)
+              }
+            } else {
+              console.log('No theme issues found.')
+            }
+
+  pr-summary:
+    name: PR Summary
+    runs-on: ubuntu-latest
+    if: github.event.action == 'opened'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add PR stats comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process')
+
+            const base = context.payload.pull_request.base.ref
+            const diffStat = execSync(`git diff --stat origin/${base}...HEAD`).toString().trim()
+            const fileCount = execSync(
+              `git diff --name-only origin/${base}...HEAD`
+            ).toString().trim().split('\n').filter(Boolean).length
+
+            const body = [
+              '## PR Stats',
+              '',
+              `**Files changed:** ${fileCount}`,
+              '',
+              '```',
+              diffStat,
+              '```',
+              '',
+              'Automated checks running:',
+              '- Code Quality (ESLint + TypeScript + Build)',
+              '- Theme Consistency (inline colors, hardcoded sizes)',
+            ].join('\n')
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            })
