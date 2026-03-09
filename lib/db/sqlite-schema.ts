@@ -51,6 +51,7 @@ export const person = sqliteTable('person', {
   id: text('id').primaryKey(),
   userId: text('userId').notNull().references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  phone: text('phone').notNull(),
   avatarUrl: text('avatarUrl'),
   createdAt: integer('createdAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
   updatedAt: integer('updatedAt', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date())

@@ -1,12 +1,17 @@
 import { create } from 'zustand'
 import type { Person, Transaction } from '@/src/lib/types'
-import { MOCK_PEOPLE, MOCK_TRANSACTIONS } from '@/src/lib/mock-data'
 
 interface DebtState {
   people: Person[]
   transactions: Transaction[]
-  addPerson: (person: Omit<Person, 'id'>) => string
-  addTransaction: (tx: Omit<Transaction, 'id' | 'date' | 'status'>) => void
+  setPeople: (people: Person[]) => void
+  setTransactions: (transactions: Transaction[]) => void
+  addPerson: (person: Person) => void
+  removePerson: (id: string) => void
+  updatePerson: (id: string, updates: Partial<Person>) => void
+  addTransaction: (tx: Transaction) => void
+  removeTransaction: (id: string) => void
+  updateTransaction: (id: string, updates: Partial<Transaction>) => void
   getPersonById: (id: string) => Person | undefined
   getTransactionsByPersonId: (personId: string) => Transaction[]
   getRecentTransactions: (limit?: number) => Transaction[]
@@ -19,34 +24,45 @@ interface DebtState {
   getTotals: () => { owedToYou: number; youOwe: number }
 }
 
-function generateId(): string {
-  return Math.random().toString(36).slice(2, 11)
-}
-
 export const useDebtStore = create<DebtState>((set, get) => ({
-  people: MOCK_PEOPLE,
-  transactions: [...MOCK_TRANSACTIONS],
+  people: [],
+  transactions: [],
+
+  setPeople: (people) => set({ people }),
+  setTransactions: (transactions) => set({ transactions }),
 
   addPerson: (person) => {
-    const id = generateId()
-    set((s) => ({ people: [...s.people, { ...person, id }] }))
-    return id
+    set((s) => ({ people: [...s.people, person] }))
+  },
+
+  removePerson: (id) => {
+    set((s) => ({
+      people: s.people.filter((p) => p.id !== id),
+      transactions: s.transactions.filter((t) => t.personId !== id),
+    }))
+  },
+
+  updatePerson: (id, updates) => {
+    set((s) => ({
+      people: s.people.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+    }))
   },
 
   addTransaction: (tx) => {
-    const id = generateId()
-    const date = new Date().toISOString().slice(0, 10)
-    const net =
-      tx.paidBy === 'you'
-        ? tx.amount
-        : -tx.amount
-    const status: Transaction['status'] =
-      net > 0 ? 'owed_to_you' : net < 0 ? 'you_owe' : 'settled'
+    set((s) => ({ transactions: [tx, ...s.transactions] }))
+  },
+
+  removeTransaction: (id) => {
     set((s) => ({
-      transactions: [
-        { ...tx, id, date, status },
-        ...s.transactions,
-      ],
+      transactions: s.transactions.filter((t) => t.id !== id),
+    }))
+  },
+
+  updateTransaction: (id, updates) => {
+    set((s) => ({
+      transactions: s.transactions.map((t) =>
+        t.id === id ? { ...t, ...updates } : t
+      ),
     }))
   },
 
@@ -83,7 +99,7 @@ export const useDebtStore = create<DebtState>((set, get) => ({
   },
 
   getTotals: () => {
-    const { people, transactions } = get()
+    const { transactions } = get()
     let owedToYou = 0
     let youOwe = 0
     const byPerson = new Map<string, number>()

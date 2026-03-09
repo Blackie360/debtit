@@ -3,6 +3,7 @@ export type DebtStatus = 'owed_to_you' | 'you_owe' | 'settled'
 export interface Person {
   id: string
   name: string
+  phone: string
   avatarUrl?: string
   lastActive?: string
 }
