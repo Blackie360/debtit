@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge'
 import { formatAmount } from '@/src/lib/utils'
 import { useUserCurrency } from '@/src/hooks/use-user-currency'
 import type { Person } from '@/src/lib/types'
-import { useDebtStore } from '@/src/store/debt-store'
 import { cn } from '@/lib/utils'
 
 type StatusType = 'owed_to_you' | 'you_owe' | 'settled'
@@ -66,6 +65,7 @@ export function PersonRow ({ person, status, amount }: PersonRowProps) {
       </div>
       <div className="shrink-0 text-right">
         <p
+          suppressHydrationWarning
           className={cn(
             'font-semibold tabular-nums',
             status === 'settled'

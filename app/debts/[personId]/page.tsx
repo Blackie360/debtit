@@ -186,7 +186,7 @@ export default function DebtDetailsPage ({
         const net = row.original.paidBy === 'you' ? row.original.amount : -row.original.amount
         const isSettled = row.original.status === 'settled'
         return (
-          <p className={cn(
+          <p suppressHydrationWarning className={cn(
             'text-right font-semibold tabular-nums',
             isSettled ? 'text-muted-foreground' : net > 0 ? 'text-green-600' : 'text-red-600'
           )}>
@@ -287,6 +287,7 @@ export default function DebtDetailsPage ({
                   <p className="text-sm text-muted-foreground">{person.phone}</p>
                 )}
                 <p
+                  suppressHydrationWarning
                   className={cn(
                     'text-xl font-bold',
                     summary.netBalance >= 0 ? 'text-green-600' : 'text-red-600'
@@ -325,7 +326,7 @@ export default function DebtDetailsPage ({
           {totalShared > 0 && (
             <div className="mt-6 border-t border-border pt-6">
               <h3 className="font-medium">Settlement Progress</h3>
-              <p className="text-sm text-muted-foreground">
+              <p suppressHydrationWarning className="text-sm text-muted-foreground">
                 Based on {formatAmount(totalShared, false, currency)} total shared history
               </p>
               <div className="mt-3 flex items-center gap-4">
@@ -337,7 +338,7 @@ export default function DebtDetailsPage ({
                 </div>
                 <span className="font-bold text-primary">{progress}%</span>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p suppressHydrationWarning className="mt-2 text-sm text-muted-foreground">
                 {progress >= 100
                   ? 'All settled!'
                   : `Only ${formatAmount(Math.abs(summary.netBalance), false, currency)} left to clear.`}

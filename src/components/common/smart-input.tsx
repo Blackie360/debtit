@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { Loader2, Sparkles, SendHorizontal } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'motion/react'
 import { Input } from '@/components/ui/input'
 import { parseDebt, type ParsedDebt } from '@/app/actions/parse-debt'
 

@@ -139,7 +139,7 @@ export default function DashboardPage () {
         const net = row.original.paidBy === 'you' ? row.original.amount : -row.original.amount
         const isSettled = row.original.status === 'settled'
         return (
-          <p className={cn(
+          <p suppressHydrationWarning className={cn(
             'text-right font-semibold tabular-nums',
             isSettled ? 'text-muted-foreground' : net > 0 ? 'text-green-600' : 'text-red-600'
           )}>
@@ -160,12 +160,14 @@ export default function DashboardPage () {
     onGlobalFilterChange: setSearch,
   })
 
-  const greeting = (() => {
+  const [greeting, setGreeting] = useState('Welcome')
+
+  useEffect(() => {
     const h = new Date().getHours()
-    if (h < 12) return 'Good morning'
-    if (h < 18) return 'Good afternoon'
-    return 'Good evening'
-  })()
+    if (h < 12) setGreeting('Good morning')
+    else if (h < 18) setGreeting('Good afternoon')
+    else setGreeting('Good evening')
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
