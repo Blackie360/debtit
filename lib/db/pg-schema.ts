@@ -51,6 +51,7 @@ export const person = pgTable('person', {
   id: text('id').primaryKey(),
   userId: text('userId').notNull().references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  phone: text('phone').notNull(),
   avatarUrl: text('avatarUrl'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow()

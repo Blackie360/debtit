@@ -1,27 +1,173 @@
 'use client'
 
+import { useState, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { Search } from 'lucide-react'
+import {
+  createColumnHelper,
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+} from '@tanstack/react-table'
+import { useQuery } from '@tanstack/react-query'
 import { AppHeader } from '@/src/components/layout/app-header'
 import { authClient } from '@/lib/auth-client'
 import { BalanceCard } from '@/src/components/debt/balance-card'
-import { DebtItem } from '@/src/components/debt/debt-item'
 import { FabAddDebt } from '@/src/components/common/fab-add-debt'
+import { DataTable } from '@/src/components/common/data-table'
+import { Input } from '@/components/ui/input'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useDebtStore } from '@/src/store/debt-store'
+import { useUserCurrency } from '@/src/hooks/use-user-currency'
+import { formatAmount, formatDate } from '@/src/lib/utils'
+import { cn } from '@/lib/utils'
+import { getContacts } from '@/app/actions/contacts'
+import { getDebts } from '@/app/actions/debts'
+import type { Transaction } from '@/src/lib/types'
+
+function getInitials (name: string): string {
+  return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+}
+
+const columnHelper = createColumnHelper<Transaction & { personName: string }>()
 
 export default function DashboardPage () {
+  const router = useRouter()
+  const currency = useUserCurrency()
   const { data: session } = authClient.useSession()
+
+  const setPeople = useDebtStore((s) => s.setPeople)
+  const setTransactions = useDebtStore((s) => s.setTransactions)
   const getTotals = useDebtStore((s) => s.getTotals)
-  const getRecentTransactions = useDebtStore((s) => s.getRecentTransactions)
+  const people = useDebtStore((s) => s.people)
+  const transactions = useDebtStore((s) => s.transactions)
+  const getPersonById = useDebtStore((s) => s.getPersonById)
+
+  const [search, setSearch] = useState('')
+
+  const { data: contactsData } = useQuery({
+    queryKey: ['contacts'],
+    queryFn: () => getContacts(),
+  })
+
+  const { data: debtsData } = useQuery({
+    queryKey: ['debts'],
+    queryFn: () => getDebts(),
+  })
+
+  useEffect(() => {
+    if (contactsData) {
+      setPeople(contactsData.map((c: { id: string; name: string; phone: string; avatarUrl: string | null }) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        avatarUrl: c.avatarUrl ?? undefined,
+      })))
+    }
+  }, [contactsData, setPeople])
+
+  useEffect(() => {
+    if (debtsData) {
+      setTransactions(debtsData.map((d: { id: string; personId: string; amount: number; paidBy: string; note: string | null; date: string | Date; status: string }) => ({
+        id: d.id,
+        personId: d.personId,
+        amount: d.amount,
+        paidBy: d.paidBy as 'you' | 'them',
+        note: d.note ?? undefined,
+        date: typeof d.date === 'string' ? d.date : new Date(d.date).toISOString().slice(0, 10),
+        status: d.status as 'owed_to_you' | 'you_owe' | 'settled',
+      })))
+    }
+  }, [debtsData, setTransactions])
+
   const { owedToYou, youOwe } = getTotals()
-  const recent = getRecentTransactions(5)
   const userName = session?.user?.name ?? session?.user?.email ?? 'there'
 
-  const greeting = (() => {
+  const recentWithNames = useMemo(() => {
+    return [...transactions]
+      .sort((a, b) => (b.date > a.date ? 1 : -1))
+      .slice(0, 10)
+      .map((tx) => ({
+        ...tx,
+        personName: getPersonById(tx.personId)?.name ?? 'Unknown',
+      }))
+  }, [transactions, people, getPersonById])
+
+  const columns = useMemo(() => [
+    columnHelper.display({
+      id: 'person',
+      header: 'Person',
+      cell: ({ row }) => (
+        <div className="flex items-center gap-3">
+          <Avatar size="sm" className="shrink-0">
+            <AvatarFallback>{getInitials(row.original.personName)}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="truncate font-medium">{row.original.personName}</p>
+            <p className="truncate text-sm text-muted-foreground">
+              {row.original.note ?? 'No description'}
+            </p>
+          </div>
+        </div>
+      ),
+    }),
+    columnHelper.accessor('date', {
+      header: 'Date',
+      cell: ({ getValue }) => (
+        <span className="text-sm text-muted-foreground">{formatDate(getValue())}</span>
+      ),
+    }),
+    columnHelper.accessor('status', {
+      header: 'Status',
+      cell: ({ getValue }) => {
+        const s = getValue()
+        return (
+          <span className={cn(
+            'text-xs font-medium',
+            s === 'owed_to_you' ? 'text-green-600' : s === 'you_owe' ? 'text-red-600' : 'text-muted-foreground'
+          )}>
+            {s === 'owed_to_you' ? 'Owed to you' : s === 'you_owe' ? 'You owe' : 'Settled'}
+          </span>
+        )
+      },
+    }),
+    columnHelper.display({
+      id: 'amount',
+      header: () => <span className="text-right block">Amount</span>,
+      cell: ({ row }) => {
+        const net = row.original.paidBy === 'you' ? row.original.amount : -row.original.amount
+        const isSettled = row.original.status === 'settled'
+        return (
+          <p suppressHydrationWarning className={cn(
+            'text-right font-semibold tabular-nums',
+            isSettled ? 'text-muted-foreground' : net > 0 ? 'text-green-600' : 'text-red-600'
+          )}>
+            {isSettled ? formatAmount(row.original.amount, false, currency) : formatAmount(net, true, currency)}
+          </p>
+        )
+      },
+    }),
+  ], [currency])
+
+  const table = useReactTable({
+    data: recentWithNames,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    globalFilterFn: 'includesString',
+    state: { globalFilter: search },
+    onGlobalFilterChange: setSearch,
+  })
+
+  const [greeting, setGreeting] = useState('Welcome')
+
+  useEffect(() => {
     const h = new Date().getHours()
-    if (h < 12) return 'Good morning'
-    if (h < 18) return 'Good afternoon'
-    return 'Good evening'
-  })()
+    if (h < 12) setGreeting('Good morning')
+    else if (h < 18) setGreeting('Good afternoon')
+    else setGreeting('Good evening')
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
@@ -39,6 +185,18 @@ export default function DashboardPage () {
           <p className="text-muted-foreground">
             Here is what&apos;s happening with your finances today.
           </p>
+        </div>
+
+        <div className="mb-8 rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search transactions, people..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 pl-9"
+            />
+          </div>
         </div>
 
         <div className="mb-8 grid gap-4 sm:grid-cols-2">
@@ -68,24 +226,10 @@ export default function DashboardPage () {
               View all →
             </Link>
           </div>
-          {recent.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-12 text-center">
-              <p className="text-muted-foreground">No transactions yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Add a debt to get started
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {recent.map((tx) => (
-                <DebtItem
-                  key={tx.id}
-                  transaction={tx}
-                  showPerson={true}
-                />
-              ))}
-            </div>
-          )}
+          <DataTable
+            table={table}
+            onRowClick={(row) => router.push(`/debts/${row.personId}`)}
+          />
         </section>
       </main>
 

@@ -46,6 +46,7 @@ export function BalanceCard ({
       </CardHeader>
       <CardContent className="pt-0">
         <p
+          suppressHydrationWarning
           className={cn(
             'text-2xl font-bold tabular-nums sm:text-3xl',
             isPositive ? 'text-green-600' : 'text-red-600'

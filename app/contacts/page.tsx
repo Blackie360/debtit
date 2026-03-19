@@ -1,15 +1,18 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { Search, UserPlus, Filter } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AppHeader } from '@/src/components/layout/app-header'
 import { BalanceCard } from '@/src/components/debt/balance-card'
 import { PersonRow } from '@/src/components/people/person-row'
+import { ContactDialog } from '@/src/components/contacts/contact-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useDebtStore } from '@/src/store/debt-store'
+import { getContacts, createContact } from '@/app/actions/contacts'
+import { getDebts } from '@/app/actions/debts'
 
 type TabFilter = 'all' | 'owed_to_you' | 'you_owe' | 'settled'
 
@@ -22,10 +25,56 @@ function getStatus (netBalance: number): 'owed_to_you' | 'you_owe' | 'settled' {
 export default function ContactsPage () {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<TabFilter>('all')
+  const [dialogOpen, setDialogOpen] = useState(false)
 
+  const queryClient = useQueryClient()
+  const setPeople = useDebtStore((s) => s.setPeople)
+  const setTransactions = useDebtStore((s) => s.setTransactions)
   const people = useDebtStore((s) => s.people)
   const getPersonSummary = useDebtStore((s) => s.getPersonSummary)
   const getTotals = useDebtStore((s) => s.getTotals)
+
+  const { data: contactsData } = useQuery({
+    queryKey: ['contacts'],
+    queryFn: () => getContacts(),
+  })
+
+  const { data: debtsData } = useQuery({
+    queryKey: ['debts'],
+    queryFn: () => getDebts(),
+  })
+
+  useEffect(() => {
+    if (contactsData) {
+      setPeople(contactsData.map((c: { id: string; name: string; phone: string; avatarUrl: string | null }) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        avatarUrl: c.avatarUrl ?? undefined,
+      })))
+    }
+  }, [contactsData, setPeople])
+
+  useEffect(() => {
+    if (debtsData) {
+      setTransactions(debtsData.map((d: { id: string; personId: string; amount: number; paidBy: string; note: string | null; date: string | Date; status: string }) => ({
+        id: d.id,
+        personId: d.personId,
+        amount: d.amount,
+        paidBy: d.paidBy as 'you' | 'them',
+        note: d.note ?? undefined,
+        date: typeof d.date === 'string' ? d.date : new Date(d.date).toISOString().slice(0, 10),
+        status: d.status as 'owed_to_you' | 'you_owe' | 'settled',
+      })))
+    }
+  }, [debtsData, setTransactions])
+
+  const createMutation = useMutation({
+    mutationFn: createContact,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+    },
+  })
 
   const { owedToYou, youOwe } = getTotals()
 
@@ -65,11 +114,9 @@ export default function ContactsPage () {
               You have {activeCount} active connections
             </p>
           </div>
-          <Button asChild>
-            <Link href="/debts/new" className="flex items-center gap-2">
-              <UserPlus className="size-4" />
-              Add New Contact
-            </Link>
+          <Button onClick={() => setDialogOpen(true)} className="flex items-center gap-2">
+            <UserPlus className="size-4" />
+            Add New Contact
           </Button>
         </div>
 
@@ -132,6 +179,14 @@ export default function ContactsPage () {
           </TabsContent>
         </Tabs>
       </main>
+
+      <ContactDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSubmit={async (data) => {
+          await createMutation.mutateAsync(data)
+        }}
+      />
     </div>
   )
 }

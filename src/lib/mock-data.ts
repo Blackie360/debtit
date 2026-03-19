@@ -1,11 +1,11 @@
 import type { Person, Transaction } from './types'
 
 export const MOCK_PEOPLE: Person[] = [
-  { id: '1', name: 'Sarah Jenkins', lastActive: '2 days ago' },
-  { id: '2', name: 'Mike Ross', lastActive: '1 day ago' },
-  { id: '3', name: 'Alex Rivera', lastActive: '3 days ago' },
-  { id: '4', name: 'Marcus Brown', lastActive: '5 days ago' },
-  { id: '5', name: 'Jordan Lee', lastActive: '1 week ago' },
+  { id: '1', name: 'Sarah Jenkins', phone: '+1 555 0101', lastActive: '2 days ago' },
+  { id: '2', name: 'Mike Ross', phone: '+1 555 0102', lastActive: '1 day ago' },
+  { id: '3', name: 'Alex Rivera', phone: '+1 555 0103', lastActive: '3 days ago' },
+  { id: '4', name: 'Marcus Brown', phone: '+1 555 0104', lastActive: '5 days ago' },
+  { id: '5', name: 'Jordan Lee', phone: '+1 555 0105', lastActive: '1 week ago' },
 ]
 
 export const MOCK_TRANSACTIONS: Transaction[] = [

@@ -1,41 +1,105 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, ArrowRight, Plus, User, X } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { SmartInput } from '@/src/components/common/smart-input'
+import { ContactDialog } from '@/src/components/contacts/contact-dialog'
 import { useDebtStore } from '@/src/store/debt-store'
+import { useUserCurrency } from '@/src/hooks/use-user-currency'
 import { cn } from '@/lib/utils'
+import { getContacts, createContact } from '@/app/actions/contacts'
+import { createDebt } from '@/app/actions/debts'
+import type { ParsedDebt } from '@/app/actions/parse-debt'
 
 export default function AddDebtPage () {
   const router = useRouter()
+  const currency = useUserCurrency()
+  const queryClient = useQueryClient()
   const [amount, setAmount] = useState('')
   const [personId, setPersonId] = useState<string | null>(null)
   const [paidBy, setPaidBy] = useState<'you' | 'them'>('you')
   const [note, setNote] = useState('')
   const [search, setSearch] = useState('')
+  const [smartFilled, setSmartFilled] = useState(false)
+  const [contactDialogOpen, setContactDialogOpen] = useState(false)
 
   const people = useDebtStore((s) => s.people)
-  const addTransaction = useDebtStore((s) => s.addTransaction)
+  const setPeople = useDebtStore((s) => s.setPeople)
+  const addPerson = useDebtStore((s) => s.addPerson)
+
+  const { data: contactsData } = useQuery({
+    queryKey: ['contacts'],
+    queryFn: () => getContacts(),
+  })
+
+  useEffect(() => {
+    if (contactsData) {
+      setPeople(contactsData.map((c: { id: string; name: string; phone: string; avatarUrl: string | null }) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        avatarUrl: c.avatarUrl ?? undefined,
+      })))
+    }
+  }, [contactsData, setPeople])
+
+  const createContactMutation = useMutation({
+    mutationFn: createContact,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] })
+      if (result && 'id' in result && result.id) {
+        const { id, name, phone } = result as { id: string; name: string; phone: string; avatarUrl: string | null }
+        addPerson({ id, name, phone, avatarUrl: (result as { avatarUrl: string | null }).avatarUrl ?? undefined })
+        setPersonId(id)
+      }
+    },
+  })
+
+  const createDebtMutation = useMutation({
+    mutationFn: createDebt,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['debts'] })
+      queryClient.invalidateQueries({ queryKey: ['recentTransactions'] })
+      router.push('/dashboard')
+    },
+  })
+
+  const handleSmartParsed = useCallback((data: ParsedDebt) => {
+    setAmount(String(data.amount))
+    setPaidBy(data.direction === 'owed' ? 'you' : 'them')
+    if (data.note) setNote(data.note)
+
+    const match = people.find(
+      (p) => p.name.toLowerCase() === data.person.toLowerCase()
+    )
+    if (match) {
+      setPersonId(match.id)
+    }
+
+    setSmartFilled(true)
+  }, [people])
 
   const filtered = people.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   )
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const num = parseFloat(amount.replace(/[^0-9.]/g, ''))
     if (!personId || isNaN(num) || num <= 0) return
-    addTransaction({
+
+    await createDebtMutation.mutateAsync({
       personId,
       amount: num,
       paidBy,
       note: note || undefined,
     })
-    router.push('/dashboard')
   }
 
   return (
@@ -64,6 +128,27 @@ export default function AddDebtPage () {
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
+            <SmartInput
+              knownPeople={people.map((p) => p.name)}
+              userCurrency={currency}
+              onParsed={handleSmartParsed}
+            />
+
+            {smartFilled && (
+              <div className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400">
+                Fields auto-filled! Review and save below.
+              </div>
+            )}
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">or fill manually</span>
+              </div>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -97,12 +182,10 @@ export default function AddDebtPage () {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => setPersonId(null)}
+                    onClick={() => setContactDialogOpen(true)}
                     className={cn(
                       'flex size-12 flex-col items-center justify-center rounded-full border-2 transition-colors',
-                      !personId
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border hover:border-primary/50'
+                      'border-border hover:border-primary/50'
                     )}
                   >
                     <Plus className="size-5" />
@@ -166,7 +249,7 @@ export default function AddDebtPage () {
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={!personId || !amount || parseFloat(amount) <= 0}
+                disabled={!personId || !amount || parseFloat(amount) <= 0 || createDebtMutation.isPending}
               >
                 Save Debt
                 <ArrowRight className="size-4" />
@@ -184,6 +267,14 @@ export default function AddDebtPage () {
           </Link>
         </div>
       </main>
+
+      <ContactDialog
+        open={contactDialogOpen}
+        onOpenChange={setContactDialogOpen}
+        onSubmit={async (data) => {
+          await createContactMutation.mutateAsync(data)
+        }}
+      />
     </div>
   )
 }

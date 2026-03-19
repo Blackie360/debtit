@@ -1,7 +1,10 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
+import withMotionwind from 'motionwind-react/next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  experimental: {
+    turbopackUseBuiltinBabel: true,
+  },
+}
 
-export default nextConfig;
+export default withMotionwind(nextConfig as Parameters<typeof withMotionwind>[0])

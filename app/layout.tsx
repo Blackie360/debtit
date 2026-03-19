@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Fira_Code, Inter } from 'next/font/google'
+import { QueryProvider } from '@/src/components/providers/query-provider'
 import './globals.css'
 
 const inter = Inter({
@@ -27,7 +28,9 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${firaCode.variable} antialiased`}
       >
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </body>
     </html>
   )

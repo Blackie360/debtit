@@ -1,10 +1,11 @@
-import { cn } from "@/lib/utils"
+import { mw } from 'motionwind-react'
 
-function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
+function Skeleton ({ className, ...props }: React.ComponentProps<'div'>) {
+  const base = 'bg-accent animate-pulse rounded-md'
   return (
-    <div
+    <mw.div
       data-slot="skeleton"
-      className={cn("bg-accent animate-pulse rounded-md", className)}
+      className={className ? `${base} ${className}` : base}
       {...props}
     />
   )
