@@ -3,7 +3,7 @@
 import { use, useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Bell, Wallet, Pencil, Trash2, MoreVertical } from 'lucide-react'
+import { ArrowLeft, Bell, Wallet, Pencil, Trash2 } from 'lucide-react'
 import {
   createColumnHelper,
   useReactTable,

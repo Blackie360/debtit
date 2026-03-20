@@ -1,17 +1,18 @@
+import Database from 'better-sqlite3'
+import postgres from 'postgres'
+import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3'
+import { drizzle as drizzlePg } from 'drizzle-orm/postgres-js'
+
 const isPostgres = process.env.NODE_ENV === 'production'
 
 function createDb () {
   if (isPostgres) {
-    const postgres = require('postgres')
-    const { drizzle } = require('drizzle-orm/postgres-js')
     const client = postgres(process.env.DATABASE_URL!)
-    return { db: drizzle(client), provider: 'pg' as const }
+    return { db: drizzlePg(client), provider: 'pg' as const }
   }
 
-  const Database = require('better-sqlite3')
-  const { drizzle } = require('drizzle-orm/better-sqlite3')
   const sqlite = new Database('database.sqlite')
-  return { db: drizzle(sqlite), provider: 'sqlite' as const }
+  return { db: drizzleSqlite(sqlite), provider: 'sqlite' as const }
 }
 
 const globalForDb = globalThis as unknown as {
@@ -24,5 +25,7 @@ if (process.env.NODE_ENV !== 'production') {
   globalForDb._db = instance
 }
 
-export const db = instance.db
+/** Dual driver: Drizzle’s pg/sqlite DB types form an unusable callable union; runtime matches `provider`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- single export for both drivers; callers use `provider` for schema
+export const db: any = instance.db
 export const provider = instance.provider
