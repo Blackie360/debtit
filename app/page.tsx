@@ -324,7 +324,7 @@ export default function LandingPage () {
                   Step {i + 1}
                 </span>
                 <h3 className="text-base font-semibold">{step.title}</h3>
-                <p className="mx-auto mt-1.5 max-w-[220px] text-sm leading-relaxed text-muted-foreground">
+                <p className="mx-auto mt-1.5 max-w-56 text-sm leading-relaxed text-muted-foreground">
                   {step.desc}
                 </p>
               </mw.div>
